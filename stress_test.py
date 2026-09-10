@@ -1,8 +1,9 @@
 """
 stress_test.py
 
-Downside scenario: what happens to leverage, coverage, and covenant
-headroom if Petco's "return to growth" story DOESN'T materialize?
+Downside scenario: what happens to leverage, coverage, and headroom
+against an illustrative internal warning threshold if Petco's "return to
+growth" story DOESN'T materialize?
 
 This is the actual underwriting question a credit committee asks. The
 base case (financials.py) assumes modest positive comps starting in
@@ -23,11 +24,21 @@ All three assumptions are the analyst's own illustrative stress, not a
 company disclosure -- exactly like the base case assumptions, but
 designed to pressure-test the credit rather than extend its recent
 improvement.
+
+TERMINOLOGY NOTE: the 5.5x threshold used here is this analyst's own
+ILLUSTRATIVE INTERNAL LEVERAGE WARNING THRESHOLD, not Petco's actual
+disclosed maintenance covenant. Exceeding it is referred to as reaching
+an "illustrative stress point," not a "covenant breach" or "default" --
+this case study does not model Petco's real credit agreement terms.
+The cash flow figure below is also a SIMPLIFIED PROXY: it nets Adj.
+EBITDA against capex and debt service only. It does NOT include cash
+taxes, working capital movements, restructuring costs, or other cash
+uses, all of which would matter for an actual liquidity assessment.
 """
 
 import pandas as pd
 from capital_structure import debt_schedule, OPERATING_LEASE_PV
-from credit_metrics import MAINTENANCE_COVENANT_LEVERAGE
+from credit_metrics import ILLUSTRATIVE_LEVERAGE_WARNING_THRESHOLD
 
 DOWNSIDE_ASSUMPTIONS = {
     "revenue_decline": -0.03,
@@ -65,23 +76,25 @@ def project_downside_case(assumptions: dict = None) -> pd.DataFrame:
 
 def stress_metrics(downside_df: pd.DataFrame, debt_df: pd.DataFrame) -> pd.DataFrame:
     merged = downside_df.merge(debt_df, on="year")
-    merged["net_leverage"] = merged["total_secured_debt"] / merged["adj_ebitda"]
+    merged["gross_secured_leverage"] = merged["total_secured_debt"] / merged["adj_ebitda"]
     merged["lease_adjusted_leverage"] = (
         (merged["total_secured_debt"] + OPERATING_LEASE_PV) / merged["adj_ebitda"]
     )
     merged["interest_coverage"] = merged["adj_ebitda"] / merged["total_cash_interest"]
 
     debt_service = merged["total_cash_interest"] + merged["total_mandatory_amort"]
-    merged["free_cash_flow_after_debt_service"] = (
+    merged["simplified_cash_flow_proxy"] = (
         merged["adj_ebitda"] - merged["capex"] - debt_service
     )
-    merged["covenant_headroom"] = MAINTENANCE_COVENANT_LEVERAGE - merged["net_leverage"]
-    merged["covenant_breach"] = merged["covenant_headroom"] < 0
+    merged["headroom_vs_warning_threshold"] = (
+        ILLUSTRATIVE_LEVERAGE_WARNING_THRESHOLD - merged["gross_secured_leverage"]
+    )
+    merged["exceeds_warning_threshold"] = merged["headroom_vs_warning_threshold"] < 0
 
-    return merged[["year", "net_sales", "adj_ebitda", "net_leverage",
+    return merged[["year", "net_sales", "adj_ebitda", "gross_secured_leverage",
                     "lease_adjusted_leverage", "interest_coverage",
-                    "free_cash_flow_after_debt_service", "covenant_headroom",
-                    "covenant_breach"]]
+                    "simplified_cash_flow_proxy", "headroom_vs_warning_threshold",
+                    "exceeds_warning_threshold"]]
 
 
 if __name__ == "__main__":
@@ -95,23 +108,26 @@ if __name__ == "__main__":
     print(metrics.to_string(index=False, formatters={
         "net_sales": "{:.0f}".format,
         "adj_ebitda": "{:.1f}".format,
-        "net_leverage": "{:.2f}x".format,
+        "gross_secured_leverage": "{:.2f}x".format,
         "lease_adjusted_leverage": "{:.2f}x".format,
         "interest_coverage": "{:.2f}x".format,
-        "free_cash_flow_after_debt_service": "{:.1f}".format,
-        "covenant_headroom": "{:.2f}x".format,
+        "simplified_cash_flow_proxy": "{:.1f}".format,
+        "headroom_vs_warning_threshold": "{:.2f}x".format,
     }))
 
-    first_breach = metrics[metrics["covenant_breach"]]
-    if not first_breach.empty:
-        breach_year = first_breach.iloc[0]["year"]
-        print(f"\n>>> Covenant breach (5.5x maintenance leverage) first occurs in FY{int(breach_year)}.")
+    first_exceed = metrics[metrics["exceeds_warning_threshold"]]
+    if not first_exceed.empty:
+        stress_year = first_exceed.iloc[0]["year"]
+        print(f"\n>>> Illustrative stress point: gross secured leverage first exceeds the "
+              f"{ILLUSTRATIVE_LEVERAGE_WARNING_THRESHOLD}x warning threshold in FY{int(stress_year)}. "
+              f"This is an analyst-defined threshold, not Petco's actual covenant level.")
     else:
-        print(f"\n>>> No covenant breach within the projection window "
-              f"-- leverage stays under {MAINTENANCE_COVENANT_LEVERAGE}x throughout.")
+        print(f"\n>>> Leverage stays under the {ILLUSTRATIVE_LEVERAGE_WARNING_THRESHOLD}x "
+              f"illustrative warning threshold throughout the projection window.")
 
-    negative_fcf = metrics[metrics["free_cash_flow_after_debt_service"] < 0]
-    if not negative_fcf.empty:
-        print(f">>> Free cash flow after debt service turns NEGATIVE starting FY{int(negative_fcf.iloc[0]['year'])}.")
+    negative_cf = metrics[metrics["simplified_cash_flow_proxy"] < 0]
+    if not negative_cf.empty:
+        print(f">>> The simplified cash-flow proxy (after capex and debt service) turns NEGATIVE "
+              f"starting FY{int(negative_cf.iloc[0]['year'])}.")
     else:
-        print(">>> Free cash flow after debt service stays positive throughout the downside case.")
+        print(">>> The simplified cash-flow proxy stays positive throughout the downside case.")
