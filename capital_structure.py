@@ -6,12 +6,29 @@ refinancing, which extended the maturity wall from 2028 to 2031.
 Sourced from Petco's Q1 FY2026 10-Q disclosures and the refinancing
 press releases (Jan-Feb 2026).
 
-Structure (both tranches are FIRST LIEN / senior secured, ranking pari
-passu against the same collateral -- this is a single-tier secured
-structure, not a senior/subordinated split, which matters for the
-recovery analysis later: in a downside, these two tranches share
-collateral proceeds pro rata rather than one being paid ahead of the
-other):
+LIEN STRUCTURE (corrected from an earlier draft of this project that
+oversimplified this as plain pari passu -- worth getting right, since
+it changes how a real recovery would work):
+
+Per Petco's notes pricing press release (January 22, 2026), the new
+Senior Secured Notes are secured on a SPLIT-LIEN basis: first-priority
+lien on fixed assets, second-priority lien on current assets (subject
+to the company's ABL-style priority structure). This is NOT the same
+as being pari passu with the Term Loan B across all collateral -- the
+two tranches likely have first-priority claims on DIFFERENT pools of
+collateral (a common structure sometimes called "crossing liens"),
+meaning actual recovery could differ meaningfully between them
+depending on how enterprise value splits between fixed and current
+assets in a distress scenario.
+
+This project's recovery_waterfall.py SIMPLIFIES this by treating the
+two tranches as sharing enterprise value pro rata rather than modeling
+the fixed-asset/current-asset split explicitly -- that simplification
+is called out again there. A full analysis would require asset-level
+detail (real estate/fixtures value vs. inventory/receivables value)
+that isn't being sourced for this case study.
+
+Structure:
 
     1. Amended First Lien Term Loan ("Term Loan B")
        - Principal: $900.0 million
@@ -24,6 +41,8 @@ other):
        - Rate: 8.250% (fixed)
        - No mandatory amortization (bullet at maturity, typical of notes)
        - Maturity: 2031
+       - First-priority lien on fixed assets, second-priority lien on
+         current assets
 
     Combined secured debt: $1.5 billion (matches Petco's reported total
     secured debt figure).
